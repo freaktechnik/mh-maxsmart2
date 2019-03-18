@@ -1,0 +1,17 @@
+{
+  "name": "mh-maxsmart2",
+  "version": "1.0.0",
+  "description": "Communicate with Max-Smart 2.0 power plugs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "max",
+    "hauri",
+    "smart",
+    "maxsmart"
+  ],
+  "author": "Martin Giger (https://humanoids.be)",
+  "license": "MIT"
+}
