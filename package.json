@@ -13,5 +13,6 @@
     "maxsmart"
   ],
   "author": "Martin Giger (https://humanoids.be)",
-  "license": "MIT"
+  "license": "MIT",
+  "repository": "github:freaktechnik/mh-maxsmart2"
 }
