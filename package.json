@@ -1,6 +1,6 @@
 {
   "name": "mh-maxsmart2",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Communicate with Max-Smart 2.0 power plugs",
   "main": "index.js",
   "scripts": {
