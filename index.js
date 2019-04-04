@@ -11,6 +11,7 @@ const socket = dgram.createSocket({
 
 const PORT = 8888,
     PROTOCOL_VERSION = 3,
+    TIMEOUT = 30000,
     CMD = {
         GET_WATT: 90,
         CONTROL: 20,
@@ -53,17 +54,30 @@ exports.send = (sn, ip, command, data = {}) => new Promise((resolve, reject) => 
     }
     const packet = makePacket(sn, ip, command, data);
     const buffer = Buffer.from(packet, 'utf8');
-    queue.push({
-        resolve,
-        reject,
-        command,
-        ip
-    });
-    socket.send(buffer, PORT, ip, (err) => {
-        if(err) {
+    const item = {
+        resolve(arg) {
+            resolve(arg);
+            clearTimeout(this.timeout);
+        },
+        reject(err) {
             reject(err);
             const index = queue.findIndex((q) => q.resolve === resolve && q.reject === reject && q.command === command && q.ip === ip);
             queue.splice(index, 1);
+            clearTimeout(this.timeout);
+        },
+        command,
+        ip,
+        timeout: setTimeout((t) => {
+            item.reject({
+                code: 0,
+                data: "Timeout"
+            });
+        }, TIMEOUT)
+    };
+    queue.push(item);
+    socket.send(buffer, PORT, ip, (err) => {
+        if(err) {
+            item.reject(err);
         }
     });
 });
