@@ -46,7 +46,7 @@ exports.makeControlPacket = (state, port = 1) => {
 //     };
 // };
 
-exports.send = (sn, ip, command, data = {}) => new Promise((resolve, reject) => {
+exports.send = (sn, ip, command, data = {}, timeout = TIMEOUT) => new Promise((resolve, reject) => {
     const existing = queue.findIndex((q) => q.ip === ip && command === command);
     if(existing > 0) {
         queue[existing].reject(new Error("Time out"));
@@ -72,7 +72,7 @@ exports.send = (sn, ip, command, data = {}) => new Promise((resolve, reject) => 
                 code: 0,
                 data: "Timeout"
             });
-        }, TIMEOUT)
+        }, timeout)
     };
     queue.push(item);
     socket.send(buffer, PORT, ip, (err) => {
