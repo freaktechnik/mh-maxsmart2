@@ -4,6 +4,7 @@
 // https://opensource.org/licenses/MIT
 
 const dgram = require('dgram');
+const easyLink = require("./easylink");
 
 const socket = dgram.createSocket({
     type: 'udp4'
@@ -35,16 +36,61 @@ exports.makeControlPacket = (state, port = 1) => {
     };
 };
 
-// exports.makeBindServerPacket = (regId) => {
-//     const date = new Date();
-//     return {
-//         regid: regId,
-//         zone: Math.round(date.getTimezoneOffset() / 1000) + 12,
-//         url: 'www.maxsmart.ch',
-//         port: 5000,
-//         time: Math.floor(Date.now() / 1000)
-//     };
-// };
+exports.makeBindServerPacket = (regId, url = 'www.maxsmart.ch', port = 5000) => {
+    const date = new Date();
+    return {
+        regid: regId,
+        zone: Math.round(date.getTimezoneOffset() / 1000) + 12,
+        url: url,
+        port: port,
+        time: Math.floor(Date.now() / 1000)
+    };
+};
+
+const formatDigit = (d) => d.toString().padStart(2, '0');
+
+const makeDiscoveryPacket = () => {
+    const now = new Date();
+    return `00dv=all,${now.getFullYear()}-${formatDigit(now.getMonth() + 1)}-${formatDigit(now.getDate())},${formatDigit(now.getHours())}:${formatDigit(now.getMinutes())}:${formatDigit(now.getSeconds())},${Math.round(now.getTimezoneOffset() / 1000) + 12};`
+};
+
+exports.discoverDevices = () => {
+    const discoSocket = dgram.createSocket({
+        type: 'udp4'
+    });
+    const packet = makeDiscoveryPacket();
+    return new Promise(async (resolve, reject) => {
+        let timeout;
+        discoSocket.on('message', (msg, rinfo) => {
+            const data = JSON.parse(msg.toString('utf8'));
+            resolve({
+                sn: data.sn,
+                ip: rinfo.address,
+                sak: data.sak,
+                mac: data.mac,
+                version: data.ver,
+                name: data.name
+            });
+            discoSocket.close();
+            clearTimeout(timeout);
+        });
+
+        await new Promise((resolve) => discoSocket.bind(8890, resolve));
+        discoSocket.setBroadcast(true);
+        discoSocket.send(Buffer.from(packet), 8888, "255.255.255.255", (err) => {
+            if(err) {
+                reject(err);
+                discoSocket.close();
+                clearTimeout(timeout);
+            }
+            discoSocket.setBroadcast(false);
+        });
+        timeout = setTimeout(() => {
+            reject(new Error("Timeout"));
+            discoSocket.close();
+        }, 10000)
+    });
+};
 
 exports.send = (sn, ip, command, data = {}, timeout = TIMEOUT) => new Promise((resolve, reject) => {
     const existing = queue.findIndex((q) => q.ip === ip && command === command);
@@ -81,6 +127,13 @@ exports.send = (sn, ip, command, data = {}, timeout = TIMEOUT) => new Promise((r
         }
     });
 });
+
+exports.pair = async (opts) => {
+    await easyLink.sendWifiInfo(opts.wifiSSID, opts.wifiPassword);
+    const deviceInfo = await exports.discoverDevices();
+    await exports.send(deviceInfo.sn, deviceInfo.ip, CMD.BIND, exports.makeBindServerPacket(opts.uid, opts.server, opts.port));
+    return deviceInfo;
+};
 
 socket.on('message', (msg, rinfo) => {
     const rawMsg = msg.toString('utf8');
