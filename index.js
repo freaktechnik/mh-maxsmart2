@@ -62,12 +62,13 @@ exports.discoverDevices = () => {
     return new Promise(async (resolve, reject) => {
         let timeout;
         discoSocket.on('message', (msg, rinfo) => {
-            const data = JSON.parse(msg.toString('utf8'));
+            const { data } = JSON.parse(msg.toString('utf8'));
             resolve({
                 sn: data.sn,
                 ip: rinfo.address,
                 sak: data.sak,
                 mac: data.mac,
+                regId: data.regid,
                 version: data.ver,
                 name: data.name
             });
