@@ -54,42 +54,40 @@ const makeDiscoveryPacket = () => {
     return `00dv=all,${now.getFullYear()}-${formatDigit(now.getMonth() + 1)}-${formatDigit(now.getDate())},${formatDigit(now.getHours())}:${formatDigit(now.getMinutes())}:${formatDigit(now.getSeconds())},${Math.round(now.getTimezoneOffset() / 1000) + 12};`
 };
 
-exports.discoverDevices = () => {
+exports.isMaxSmart2Plug = (device) => device.sn.startsWith("SWW1");
+
+exports.discoverDevices = async (deviceListener, timeout = 10000) => {
     const discoSocket = dgram.createSocket({
         type: 'udp4'
     });
     const packet = makeDiscoveryPacket();
-    return new Promise(async (resolve, reject) => {
-        let timeout;
-        discoSocket.on('message', (msg, rinfo) => {
-            const { data } = JSON.parse(msg.toString('utf8'));
-            resolve({
-                sn: data.sn,
-                ip: rinfo.address,
-                sak: data.sak,
-                mac: data.mac,
-                regId: data.regid,
-                version: data.ver,
-                name: data.name
-            });
-            discoSocket.close();
-            clearTimeout(timeout);
+    discoSocket.on('message', (msg, rinfo) => {
+        const { data } = JSON.parse(msg.toString('utf8'));
+        deviceListener({
+            sn: data.sn,
+            ip: rinfo.address,
+            sak: data.sak,
+            mac: data.mac,
+            regId: data.regid,
+            version: data.ver,
+            name: data.name
         });
-
-        await new Promise((resolve) => discoSocket.bind(8890, resolve));
-        discoSocket.setBroadcast(true);
+    });
+    await new Promise((resolve) => discoSocket.bind(8890, resolve));
+    discoSocket.setBroadcast(true);
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            discoSocket.setBroadcast(false);
+            discoSocket.close();
+            resolve();
+        }, 10000);
         discoSocket.send(Buffer.from(packet), 8888, "255.255.255.255", (err) => {
             if(err) {
-                reject(err);
                 discoSocket.close();
                 clearTimeout(timeout);
+                reject(err);
             }
-            discoSocket.setBroadcast(false);
         });
-        timeout = setTimeout(() => {
-            reject(new Error("Timeout"));
-            discoSocket.close();
-        }, 10000)
     });
 };
 
@@ -131,7 +129,13 @@ exports.send = (sn, ip, command, data = {}, timeout = TIMEOUT) => new Promise((r
 
 exports.pair = async (opts) => {
     await easyLink.sendWifiInfo(opts.wifiSSID, opts.wifiPassword);
-    const deviceInfo = await exports.discoverDevices();
+    const deviceInfo = await new Promise((resolve, reject) => {
+        exports.discoverDevices((device) => {
+            if(exports.isMaxSmart2Plug(device)) {
+                resolve(device);
+            }
+        }).then(resolve).catch(reject);
+    });
     await exports.send(deviceInfo.sn, deviceInfo.ip, CMD.BIND, exports.makeBindServerPacket(opts.uid, opts.server, opts.port));
     return deviceInfo;
 };
